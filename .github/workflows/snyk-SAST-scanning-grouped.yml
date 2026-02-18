@@ -1,0 +1,157 @@
+name: Snyk SAST + Dependency - Scan All Branches
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  discover:
+    name: Discover All Branches
+    runs-on: ubuntu-latest
+    outputs:
+      branches: ${{ steps.get-branches.outputs.branches }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get All Branches
+        id: get-branches
+        run: |
+          branches=$(git branch -r | sed 's|origin/||' | tr -d ' ' | grep -v 'HEAD' | jq -R . | jq -sc .)
+          echo "branches=$branches" >> $GITHUB_OUTPUT
+
+  snyk-code:
+    name: Scan - ${{ matrix.branch }}
+    needs: discover
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        branch: ${{ fromJson(needs.discover.outputs.branches) }}
+      max-parallel: 4
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Authenticate Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: Snyk Code Test + Report to Portal
+        run: |
+          snyk code test \
+            --report \
+            --org=09cac241-615c-45b7-9640-9a3fa5a01e22 \
+            --project-name="${{ github.repository }}" \
+            --target-name="${{ github.repository }}" \
+            --target-reference="${{ matrix.branch }}"
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
+
+  snyk-open-source:
+    name: Dependencies - ${{ matrix.branch }}
+    needs: discover
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        branch: ${{ fromJson(needs.discover.outputs.branches) }}
+      max-parallel: 4
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Setup Java (Java, Kotlin, Groovy, Scala)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node (JavaScript, TypeScript)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Setup .NET (C#, VB.NET)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Flutter (Dart)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.16.x'
+          channel: 'stable'
+
+      - name: Setup Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.15.7'
+          otp-version: '26.1.2'
+
+      - name: Install C/C++ build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+
+      - name: Install Salesforce CLI (Apex)
+        run: npm install -g @salesforce/cli
+
+      - name: Make build wrappers executable
+        run: |
+          for f in gradlew mvnw; do
+            if [ -f "./$f" ]; then
+              chmod +x "./$f"
+            fi
+          done
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Authenticate Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: Snyk Open Source Monitor + Report to Portal
+        run: |
+          snyk monitor \
+            --org=09cac241-615c-45b7-9640-9a3fa5a01e22 \
+            --project-name="${{ github.repository }}" \
+            --target-name="${{ github.repository }}" \
+            --target-reference="${{ matrix.branch }}"
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
