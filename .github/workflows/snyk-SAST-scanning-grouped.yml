@@ -149,15 +149,20 @@ jobs:
         run: |
           ROOTS=$(mktemp)
           find . -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . \( -name "*.csproj" -o -name "*.sln" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "pom.xml" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "yarn.lock" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "pnpm-lock.yaml" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . \( -name "*.csproj" -o -name "*.vbproj" -o -name "*.fsproj" -o -name "*.sln" -o -name "packages.config" -o -name "project.json" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "pom.xml" -o -name "build.sbt" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
           find . -name "go.mod" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . \( -name "requirements*.txt" -o -name "setup.py" -o -name "pyproject.toml" -o -name "Pipfile" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . \( -name "requirements*.txt" -o -name "setup.py" -o -name "pyproject.toml" -o -name "Pipfile" -o -name "Pipfile.lock" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
           find . -name "Gemfile" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
           find . -name "composer.json" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
           find . -name "Cargo.toml" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
           find . -name "pubspec.yaml" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
           find . -name "mix.exs" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "Package.swift" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "Podfile" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . \( -name "conanfile.txt" -o -name "conanfile.py" -o -name "vcpkg.json" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
           sort -u "$ROOTS" > roots.txt
           if [ ! -s roots.txt ]; then
             echo "." > roots.txt
