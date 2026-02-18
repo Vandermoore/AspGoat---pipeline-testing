@@ -174,7 +174,7 @@ jobs:
               --org=09cac241-615c-45b7-9640-9a3fa5a01e22 \
               --project-name="${{ github.repository }}" \
               --target-name="${{ github.repository }}" \
-              --target-reference="${{ matrix.branch }}") || true
+              --target-reference="${{ matrix.branch }}")
           done < roots.txt
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
