@@ -145,13 +145,37 @@ jobs:
       - name: Authenticate Snyk
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
-      - name: Snyk Open Source Monitor + Report to Portal
+      - name: Discover project roots
         run: |
-          snyk monitor \
-            --org=09cac241-615c-45b7-9640-9a3fa5a01e22 \
-            --project-name="${{ github.repository }}" \
-            --target-name="${{ github.repository }}" \
-            --target-reference="${{ matrix.branch }}"
+          ROOTS=$(mktemp)
+          find . -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . \( -name "*.csproj" -o -name "*.sln" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "pom.xml" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "go.mod" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . \( -name "requirements*.txt" -o -name "setup.py" -o -name "pyproject.toml" -o -name "Pipfile" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "Gemfile" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "composer.json" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "Cargo.toml" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "pubspec.yaml" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          find . -name "mix.exs" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
+          sort -u "$ROOTS" > roots.txt
+          if [ ! -s roots.txt ]; then
+            echo "." > roots.txt
+          fi
+          echo "Project roots:"
+          cat roots.txt
+
+      - name: Snyk Open Source Monitor (all projects)
+        run: |
+          while IFS= read -r dir; do
+            [ -z "$dir" ] && continue
+            echo "Monitoring project in: $dir"
+            (cd "$dir" && snyk monitor \
+              --org=09cac241-615c-45b7-9640-9a3fa5a01e22 \
+              --project-name="${{ github.repository }}" \
+              --target-name="${{ github.repository }}" \
+              --target-reference="${{ matrix.branch }}") || true
+          done < roots.txt
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
