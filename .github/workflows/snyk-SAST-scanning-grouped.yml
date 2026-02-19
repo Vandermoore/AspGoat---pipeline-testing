@@ -1,6 +1,8 @@
 name: Snyk Dependency Scan
 
 on:
+  schedule:
+    - cron: "0 8 * * 0"  # Weekly, every Sunday at 8am UTC
   workflow_dispatch:
 
 permissions:
@@ -243,7 +245,6 @@ jobs:
           snyk monitor \
             --all-projects \
             --org="${SNYK_ORG}" \
-            --project-name="${{ github.event.repository.name }}" \
             --target-reference="${{ matrix.branch }}" \
             --project-tags="branch=${{ matrix.branch }}"
         env:
