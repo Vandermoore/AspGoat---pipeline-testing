@@ -56,7 +56,7 @@ jobs:
           snyk code test \
             --report \
             --org="${SNYK_ORG}" \
-            --project-name="${{ github.repository }}" \
+            --project-name="${{ github.repository }} - SAST Scan" \
             --target-name="${{ github.repository }}" \
             --target-reference="${{ matrix.branch }}"
         env:
@@ -314,7 +314,7 @@ jobs:
             echo "Monitoring: $dir"
             (cd "$dir" && snyk monitor \
               --org="${SNYK_ORG}" \
-              --target-name="${{ github.repository }}" \
+              --target-name="${{ github.repository }} - SAST Scan" \
               --target-reference="${{ matrix.branch }}" \
               --project-tags="branch=${{ matrix.branch }}") || true
           done < roots.txt
