@@ -1,7 +1,13 @@
-name: Snyk SAST + Dependency - Scan All Branches
+name: Snyk Dependency Scan
 
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SNYK_ORG: ${{ vars.SNYK_ORG }}  # Set this in repo/org Actions Variables
 
 jobs:
   discover:
@@ -20,7 +26,7 @@ jobs:
           branches=$(git branch -r | sed 's|origin/||' | tr -d ' ' | grep -v 'HEAD' | jq -R . | jq -sc .)
           echo "branches=$branches" >> $GITHUB_OUTPUT
 
-  snyk-code:
+  snyk-scan:
     name: Scan - ${{ matrix.branch }}
     needs: discover
     runs-on: ubuntu-latest
@@ -35,152 +41,210 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ matrix.branch }}
+          fetch-depth: 0
 
-      - name: Install Snyk CLI
-        run: npm install -g snyk
-
-      - name: Authenticate Snyk
-        run: snyk auth ${{ secrets.SNYK_TOKEN }}
-
-      - name: Snyk Code Test + Report to Portal
-        run: |
-          snyk code test \
-            --report \
-            --org=09cac241-615c-45b7-9640-9a3fa5a01e22 \
-            --project-name="${{ github.repository }}" \
-            --target-name="${{ github.repository }}" \
-            --target-reference="${{ matrix.branch }}"
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
-
-  snyk-open-source:
-    name: Dependencies - ${{ matrix.branch }}
-    needs: discover
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    strategy:
-      matrix:
-        branch: ${{ fromJson(needs.discover.outputs.branches) }}
-      max-parallel: 4
-      fail-fast: false
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.branch }}
-
-      - name: Setup Java (Java, Kotlin, Groovy, Scala)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Node (JavaScript, TypeScript)
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Setup .NET (C#, VB.NET)
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          tools: composer
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup Flutter (Dart)
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.16.x'
-          channel: 'stable'
-
-      - name: Setup Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          elixir-version: '1.15.7'
-          otp-version: '26.1.2'
-
-      - name: Install C/C++ build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake
-
-      - name: Install Salesforce CLI (Apex)
-        run: npm install -g @salesforce/cli
-
-      - name: Make build wrappers executable
-        run: |
-          for f in gradlew mvnw; do
-            if [ -f "./$f" ]; then
-              chmod +x "./$f"
-            fi
-          done
-
       - name: Install Snyk CLI
         run: npm install -g snyk
 
       - name: Authenticate Snyk
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
-      - name: Discover project roots
-        run: |
-          ROOTS=$(mktemp)
-          find . -name "package.json" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "yarn.lock" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "pnpm-lock.yaml" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . \( -name "*.csproj" -o -name "*.vbproj" -o -name "*.fsproj" -o -name "*.sln" -o -name "packages.config" -o -name "project.json" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "pom.xml" -o -name "build.sbt" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "go.mod" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . \( -name "requirements*.txt" -o -name "setup.py" -o -name "pyproject.toml" -o -name "Pipfile" -o -name "Pipfile.lock" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "Gemfile" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "composer.json" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "Cargo.toml" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "pubspec.yaml" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "mix.exs" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "Package.swift" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . -name "Podfile" -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          find . \( -name "conanfile.txt" -o -name "conanfile.py" -o -name "vcpkg.json" \) -not -path "*/.git/*" 2>/dev/null | while read f; do dirname "$f"; done >> "$ROOTS" || true
-          sort -u "$ROOTS" > roots.txt
-          if [ ! -s roots.txt ]; then
-            echo "." > roots.txt
-          fi
-          echo "Project roots:"
-          cat roots.txt
+      # ── Dependency Detection & Installation ──────────────────────────────────
 
-      - name: Snyk Open Source Monitor (all projects)
+      - name: Detect and install dependencies
         run: |
-          while IFS= read -r dir; do
-            [ -z "$dir" ] && continue
-            echo "Monitoring project in: $dir"
-            (cd "$dir" && snyk monitor \
-              --org=09cac241-615c-45b7-9640-9a3fa5a01e22 \
-              --project-name="${{ github.repository }}" \
-              --target-name="${{ github.repository }}" \
-              --target-reference="${{ matrix.branch }}")
-          done < roots.txt
+          NEEDS_NODE=false
+          NEEDS_JAVA=false
+          NEEDS_PYTHON=false
+          NEEDS_DOTNET=false
+          NEEDS_GO=false
+          NEEDS_PHP=false
+          NEEDS_RUBY=false
+          NEEDS_RUST=false
+
+          # ── Node.js ──────────────────────────────────────────────────────────
+          if [ -f package.json ] || [ -f yarn.lock ] || [ -f pnpm-lock.yaml ] || [ -f package-lock.json ]; then
+            NEEDS_NODE=true
+            echo "✓ Detected: Node.js"
+
+            NODE_VERSION=""
+            if [ -f .nvmrc ]; then
+              NODE_VERSION=$(cat .nvmrc | tr -d 'v' | xargs)
+            elif [ -f .node-version ]; then
+              NODE_VERSION=$(cat .node-version | tr -d 'v' | xargs)
+            elif [ -f package.json ] && command -v jq &> /dev/null; then
+              NODE_VERSION=$(jq -r '.engines.node // empty' package.json 2>/dev/null | sed 's/[^0-9.]//g' | head -c 4)
+            fi
+
+            if [ -n "$NODE_VERSION" ] && [ "$NODE_VERSION" != "20" ]; then
+              npm install -g n
+              n "$NODE_VERSION" || echo "Warning: Could not install Node.js $NODE_VERSION, using default"
+            fi
+
+            if [ -f yarn.lock ]; then
+              npm install -g yarn
+              yarn install --frozen-lockfile || yarn install || true
+            elif [ -f pnpm-lock.yaml ]; then
+              npm install -g pnpm
+              pnpm install --frozen-lockfile || pnpm install || true
+            elif [ -f package-lock.json ]; then
+              npm ci || npm install || true
+            elif [ -f package.json ]; then
+              npm install || true
+            fi
+          fi
+
+          # ── Java (Maven / Gradle / sbt) ──────────────────────────────────────
+          if [ -f pom.xml ] || [ -f build.gradle ] || [ -f build.gradle.kts ] || [ -f gradlew ] || [ -f build.sbt ]; then
+            NEEDS_JAVA=true
+            echo "✓ Detected: Java"
+
+            if [ -f gradlew ]; then
+              chmod +x gradlew
+              ./gradlew dependencies --no-daemon || true
+            elif [ -f pom.xml ]; then
+              if ! command -v mvn &> /dev/null; then
+                wget -q https://archive.apache.org/dist/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz
+                tar -xzf apache-maven-3.9.5-bin.tar.gz
+                export PATH="$PWD/apache-maven-3.9.5/bin:$PATH"
+              fi
+              mvn dependency:resolve || true
+            elif [ -f build.sbt ]; then
+              if ! command -v sbt &> /dev/null; then
+                curl -s "https://raw.githubusercontent.com/sbt/sbt/1.x/sbt" > sbt
+                chmod +x sbt
+                export PATH="$PWD:$PATH"
+              fi
+              sbt update || true
+            fi
+          fi
+
+          # ── Python (pip / pipenv / poetry) ───────────────────────────────────
+          if [ -f requirements.txt ] || [ -f Pipfile ] || [ -f poetry.lock ] || [ -f pyproject.toml ] || [ -f setup.py ]; then
+            NEEDS_PYTHON=true
+            echo "✓ Detected: Python"
+
+            if [ -f Pipfile ]; then
+              pip install pipenv || true
+              pipenv install --dev || pipenv install || true
+            elif [ -f poetry.lock ] || [ -f pyproject.toml ]; then
+              pip install poetry || true
+              poetry install || true
+            elif [ -f requirements.txt ]; then
+              pip install -r requirements.txt || true
+            elif [ -f setup.py ]; then
+              pip install -e . || true
+            fi
+          fi
+
+          # ── .NET ─────────────────────────────────────────────────────────────
+          if find . -maxdepth 2 \( -name "*.csproj" -o -name "*.fsproj" -o -name "*.vbproj" -o -name "packages.config" \) | grep -q .; then
+            NEEDS_DOTNET=true
+            echo "✓ Detected: .NET"
+
+            if ! command -v dotnet &> /dev/null; then
+              wget -q https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
+              chmod +x dotnet-install.sh
+              ./dotnet-install.sh --channel LTS || true
+              export PATH="$HOME/.dotnet:$PATH"
+            fi
+            dotnet restore || true
+          fi
+
+          # ── Go ───────────────────────────────────────────────────────────────
+          if [ -f go.mod ] || [ -f go.sum ]; then
+            NEEDS_GO=true
+            echo "✓ Detected: Go"
+
+            GO_VERSION=$(grep -i "^go " go.mod 2>/dev/null | grep -oP '\d+\.\d+' | head -1)
+            if [ -n "$GO_VERSION" ]; then
+              wget -q "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -O go.tar.gz || true
+              if [ -f go.tar.gz ]; then
+                sudo rm -rf /usr/local/go
+                sudo tar -C /usr/local -xzf go.tar.gz
+                export PATH="/usr/local/go/bin:$PATH"
+              fi
+            fi
+            go mod download || true
+          fi
+
+          # ── PHP ──────────────────────────────────────────────────────────────
+          if [ -f composer.json ] || [ -f composer.lock ]; then
+            NEEDS_PHP=true
+            echo "✓ Detected: PHP"
+
+            if ! command -v php &> /dev/null; then
+              sudo apt-get update -qq && sudo apt-get install -y php php-cli php-xml php-mbstring php-curl || true
+            fi
+            if ! command -v composer &> /dev/null; then
+              curl -sS https://getcomposer.org/installer | php
+              sudo mv composer.phar /usr/local/bin/composer || true
+            fi
+            composer install --no-interaction || true
+          fi
+
+          # ── Ruby ─────────────────────────────────────────────────────────────
+          if [ -f Gemfile ] || [ -f Gemfile.lock ]; then
+            NEEDS_RUBY=true
+            echo "✓ Detected: Ruby"
+
+            RUBY_VERSION=""
+            if [ -f .ruby-version ]; then
+              RUBY_VERSION=$(cat .ruby-version | xargs)
+            fi
+
+            if [ -n "$RUBY_VERSION" ]; then
+              if ! command -v rbenv &> /dev/null; then
+                git clone https://github.com/rbenv/rbenv.git ~/.rbenv
+                export PATH="$HOME/.rbenv/bin:$PATH"
+                eval "$(rbenv init -)"
+              fi
+              rbenv install -s "$RUBY_VERSION" || true
+              rbenv global "$RUBY_VERSION"
+            fi
+
+            gem install bundler || true
+            bundle install || true
+          fi
+
+          # ── Rust ─────────────────────────────────────────────────────────────
+          if [ -f Cargo.toml ] || [ -f Cargo.lock ]; then
+            NEEDS_RUST=true
+            echo "✓ Detected: Rust"
+
+            if ! command -v rustc &> /dev/null; then
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+              source "$HOME/.cargo/env"
+            fi
+            cargo fetch || true
+          fi
+
+      # ── Snyk Scanning ────────────────────────────────────────────────────────
+
+      - name: Run Snyk Test
+        run: |
+          snyk test \
+            --all-projects \
+            --org="${SNYK_ORG}" \
+            --project-name="${{ github.event.repository.name }}" \
+            --target-reference="${{ matrix.branch }}" \
+            --severity-threshold=medium \
+            || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
+
+      - name: Monitor in Snyk
+        run: |
+          snyk monitor \
+            --all-projects \
+            --org="${SNYK_ORG}" \
+            --project-name="${{ github.event.repository.name }}" \
+            --target-reference="${{ matrix.branch }}" \
+            --project-tags="branch=${{ matrix.branch }}"
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
