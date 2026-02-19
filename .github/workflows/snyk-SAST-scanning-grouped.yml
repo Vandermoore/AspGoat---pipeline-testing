@@ -1,6 +1,8 @@
 name: Snyk SAST + Dependency Scan
 
 on:
+  schedule:
+    - cron: "0 8 * * 0"  # Weekly, every Sunday at 8am UTC
   workflow_dispatch:
 
 permissions:
@@ -56,8 +58,8 @@ jobs:
           snyk code test \
             --report \
             --org="${SNYK_ORG}" \
-            --project-name="${{ github.repository }} - SAST Scan" \
-            --target-name="${{ github.repository }}" \
+            --project-name="${{ github.repository }}" \
+            --target-name="${{ github.repository }} - SAST Scan" \
             --target-reference="${{ matrix.branch }}"
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -314,7 +316,7 @@ jobs:
             echo "Monitoring: $dir"
             (cd "$dir" && snyk monitor \
               --org="${SNYK_ORG}" \
-              --target-name="${{ github.repository }} - SAST Scan" \
+              --target-name="${{ github.repository }} - SCA Scan" \
               --target-reference="${{ matrix.branch }}" \
               --project-tags="branch=${{ matrix.branch }}") || true
           done < roots.txt
